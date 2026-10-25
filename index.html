@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>骸骨深淵 · Abyss of Bones</title>
+  <meta name="description" content="暗黑風格的 3D 動作 RPG：深入骸骨洞窟，砍碎成群的骷髏，守住方尖碑，撿裝備，打倒骸骨之王。 A dark 3D action RPG: hordes of skeletons, loot, and the Bone King.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Noto+Serif+TC:wght@500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=1">
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+  </script>
+  <script src="/hub.js" defer data-pos="bottom-left"></script>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="floaters"></div>
+
+  <div id="hud" hidden>
+    <div id="counters">
+      <div class="ctr soul" title=""><i></i><b id="cSouls">0</b></div>
+      <div class="ctr kill" title=""><i></i><b id="cKills">0</b></div>
+      <div class="ctr gold" title=""><i></i><b id="cGold">0</b></div>
+    </div>
+    <div id="event" hidden>
+      <div id="evTime">00:00</div>
+      <div class="evbar"><i id="evFill"></i><span id="evSkull"></span></div>
+      <div id="evText"></div>
+    </div>
+    <div id="bossbar" hidden><b id="bossName"></b><div class="bb"><i id="bossFill"></i></div></div>
+    <div id="mapbox"><canvas id="minimap" width="220" height="220"></canvas><div id="floorName"></div></div>
+    <div id="banner"><b id="bnBig"></b><span id="bnSmall"></span></div>
+    <div id="toasts"></div>
+    <div id="hint"></div>
+
+    <div id="bottom">
+      <div class="orb hp"><div class="glass"><div class="liquid" id="hpLiq"></div></div><span id="hpTxt"></span></div>
+      <div id="bar">
+        <div id="slots"></div>
+        <div id="xp"><i id="xpFill"></i><span id="xpTxt"></span></div>
+        <div id="lvl"></div>
+      </div>
+      <div class="orb mp"><div class="glass"><div class="liquid" id="mpLiq"></div></div><span id="mpTxt"></span></div>
+    </div>
+    <button id="pointsBtn" hidden><span>✦</span><b id="pointsN">1</b></button>
+    <div id="menuBtns"><button data-m="bag">🎒<small>I</small></button><button data-m="map">🗺️<small>Tab</small></button><button data-m="menu">☰<small>Esc</small></button></div>
+    <canvas id="bigmap" width="640" height="640" hidden></canvas>
+
+    <div id="touch" hidden>
+      <div id="joy"><i id="joyKnob"></i></div>
+      <div id="tbtns">
+        <button class="tb big" data-t="attack"></button>
+        <button class="tb" data-t="s0"></button><button class="tb" data-t="s1"></button><button class="tb" data-t="s2"></button><button class="tb" data-t="s3"></button>
+        <button class="tb sm" data-t="dash"></button><button class="tb sm" data-t="potion"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel" hidden><div id="pbox"><button id="pX">✕</button><div id="pBody"></div></div></div>
+
+  <div id="title">
+    <div class="tlogo"><span class="zh">骸骨深淵</span><span class="en">ABYSS OF BONES</span></div>
+    <p id="tSub"></p>
+    <div class="row"><button id="tPlay" class="big"></button><button id="tNew"></button><button id="tLang"></button></div>
+    <p id="tHelp" class="help"></p>
+  </div>
+
+  <script type="module" src="js/main.js?v=1"></script>
+</body>
+</html>
