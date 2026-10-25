@@ -1,7 +1,7 @@
 // Light and fire: glowing particles (fire, sparks, frost, souls), dust and smoke, lightning bolts, the sword's trail,
 // circles on the ground (warnings before a boss slam, scorch marks, the frost ring) and a camera shake.
 import * as THREE from 'three';
-import { glowTexture } from './world.js';
+import { glowTexture } from './world.js?v=2';
 
 const VERT = `attribute float size; attribute vec4 rgba; varying vec4 vC; uniform float uScale;
 void main() { vC = rgba; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = size * uScale / -mv.z; gl_Position = projectionMatrix * mv; }`;
@@ -91,7 +91,7 @@ export class FX {
     this.decals = this.decals.filter((d) => { if (d.t < d.life) return true; this.scene.remove(d.mesh); d.mesh.material.dispose(); if (d.inner) { this.scene.remove(d.inner); d.inner.material.dispose(); } return false; });
     // the trail ribbon: brighter at the newest edge, fading into nothing
     const T = this.trail, pos = T.mesh.geometry.attributes.position, col = T.mesh.geometry.attributes.color;
-    for (let k = 0; k < T.n; k++) { const p = T.pts[Math.min(k, T.pts.length - 1)], f = T.pts.length ? 1 - k / T.n : 0; if (!p) { pos.setXYZ(k * 2, 0, -99, 0); pos.setXYZ(k * 2 + 1, 0, -99, 0); continue; } pos.setXYZ(k * 2, p[0].x, p[0].y, p[0].z); pos.setXYZ(k * 2 + 1, p[1].x, p[1].y, p[1].z); col.setXYZ(k * 2, 0, 0, 0); col.setXYZ(k * 2 + 1, 0.9 * f, 0.85 * f, 0.7 * f); }
+    for (let k = 0; k < T.n; k++) { const p = T.pts[Math.min(k, T.pts.length - 1)], f = T.pts.length ? 1 - k / T.n : 0; if (!p) { pos.setXYZ(k * 2, 0, -99, 0); pos.setXYZ(k * 2 + 1, 0, -99, 0); continue; } pos.setXYZ(k * 2, p[0].x, p[0].y, p[0].z); pos.setXYZ(k * 2 + 1, p[1].x, p[1].y, p[1].z); col.setXYZ(k * 2, 0, 0, 0); col.setXYZ(k * 2 + 1, 0.42 * f * f, 0.4 * f * f, 0.34 * f * f); }
     pos.needsUpdate = true; col.needsUpdate = true;
     // the shake
     if (this.shakeT > 0) { this.shakeT -= dt; const a = this.shakeA * Math.max(0, this.shakeT) * 3; camera.position.x += (Math.random() - 0.5) * a; camera.position.z += (Math.random() - 0.5) * a; if (this.shakeT <= 0) this.shakeA = 0; }

@@ -47,9 +47,12 @@ export function makeFloor(depth, seed = depth * 7919 + 13) {
   const bones = pickSpots(Math.floor(open.length / 9), 1.5);
   const crystals = pickSpots(6 + Math.floor(open.length / 160), 6, nearWall);
   const slabs = pickSpots(Math.floor(open.length / 12), 1.4);
+  const pillars = pickSpots(Math.floor(open.length / 140), 6, (k) => nearWall(k) && farFromEnds(k));
+  const tombs = pickSpots(Math.floor(open.length / 120), 3, farFromEnds);
+  const candles = pickSpots(Math.floor(open.length / 75), 3, nearWall);
   // the obelisk arena gets a ring of braziers
   const ring = []; for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + 0.3, i = Math.round(arena[0] + Math.cos(a) * 4.6), j = Math.round(arena[1] + Math.sin(a) * 4.6); if (!grid[i + j * W]) ring.push([i, j]); }
-  return { depth, seed, W, H, grid, start, arena, boss, packs, chests, shrines, braziers: [...braziers, ...ring], bones, crystals, slabs, open: open.length };
+  return { depth, seed, W, H, grid, start, arena, boss, packs, chests, shrines, braziers: [...braziers, ...ring], pillars, tombs, candles, bones, crystals, slabs, open: open.length };
 }
 function largest(grid, W, H) {
   const seen = new Uint8Array(W * H); let best = new Set();

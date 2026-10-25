@@ -2,7 +2,7 @@
 // cliffs where the grid is solid), boulders along the walls, flat old slabs, bones everywhere, iron braziers with
 // living fire, teal crystals, the obelisk on its rune circle, chests, shrines and the portal down.
 import * as THREE from 'three';
-import { CELL, density, rng, centre } from './cave.js';
+import { CELL, density, rng, centre } from './cave.js?v=2';
 
 // ------------------------------------------------------------------ textures painted on a canvas
 function canvas(n) { const c = document.createElement('canvas'); c.width = c.height = n; return c; }
@@ -26,6 +26,19 @@ export function stoneTextures() {
   const map = new THREE.CanvasTexture(c); map.wrapS = map.wrapT = THREE.RepeatWrapping; map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 4;
   const bump = new THREE.CanvasTexture(c); bump.wrapS = bump.wrapT = THREE.RepeatWrapping;
   return (STONE = { map, bump });
+}
+// layered, cracked rock for the cave walls
+let ROCK = null;
+function rockTexture() {
+  if (ROCK) return ROCK;
+  const N = 256, c = canvas(N), g = c.getContext('2d'), img = g.createImageData(N, N), d = img.data, R = rng(31), grid = [], S = 16;
+  for (let k = 0; k < S * S; k++) grid.push(R());
+  const vn = (x, y, s) => { const u = x / N * s, v = y / N * s, i = Math.floor(u), j = Math.floor(v), fu = u - i, fv = v - j, at = (a, b) => grid[((a % s) + s) % s + (((b % s) + s) % s) * S], sm = (t) => t * t * (3 - 2 * t); return (at(i, j) * (1 - sm(fu)) + at(i + 1, j) * sm(fu)) * (1 - sm(fv)) + (at(i, j + 1) * (1 - sm(fu)) + at(i + 1, j + 1) * sm(fu)) * sm(fv); };
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const n = vn(x, y, 4) * 0.5 + vn(x, y, 8) * 0.3 + vn(x, y, 16) * 0.2, strata = 0.5 + 0.5 * Math.sin((y + vn(x, y, 4) * 40) * 0.22), crack = 1 - 0.25 * Math.max(0, 1 - Math.abs(vn(x, y * 0.5, 8) - 0.5) / 0.03);
+    const v = (0.3 + n * 0.5 + strata * 0.1) * crack, k = (x + y * N) * 4; d[k] = 255 * v * 0.92; d[k + 1] = 255 * v * 0.94; d[k + 2] = 255 * v * 0.86; d[k + 3] = 255;
+  }
+  g.putImageData(img, 0, 0); ROCK = new THREE.CanvasTexture(c); ROCK.wrapS = ROCK.wrapT = THREE.RepeatWrapping; ROCK.colorSpace = THREE.SRGBColorSpace; return ROCK;
 }
 // a soft round glow (fire, magic, sparks)
 let GLOW = null;
@@ -81,7 +94,20 @@ export function buildWorld(F, scene) {
     col[k * 3] = r; col[k * 3 + 1] = gg; col[k * 3 + 2] = b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.computeVertexNormals();
-  const ground = new THREE.Mesh(geo, std('#ffffff', { map: tex.map, bumpMap: tex.bump, bumpScale: 0.8, vertexColors: true, roughness: 0.95 }));
+  const groundMat = std('#ffffff', { map: tex.map, bumpMap: tex.bump, bumpScale: 0.55, vertexColors: true, roughness: 0.95 });
+  // the cliffs get their own layered rock instead of the floor's flagstones (picked by how steep and how high the surface is)
+  groundMat.onBeforeCompile = (sh) => {
+    sh.uniforms.rockMap = { value: rockTexture() };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
+varying vec3 vWP; varying float vNY;`).replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vNY = normal.y;`);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+uniform sampler2D rockMap; varying vec3 vWP; varying float vNY;`).replace('#include <map_fragment>', `#include <map_fragment>
+      float flatK = smoothstep(0.55, 0.9, vNY), high = smoothstep(0.9, 2.2, vWP.y);
+      vec3 side = texture2D(rockMap, vec2(vWP.x * 0.7 + vWP.z * 0.7, vWP.y * 1.6) * 0.16).rgb, top = texture2D(rockMap, vWP.xz * 0.11).rgb;
+      diffuseColor.rgb = mix(diffuseColor.rgb, mix(side, top, flatK) * 0.95, max(1.0 - flatK, high));`);
+  };
+  const ground = new THREE.Mesh(geo, groundMat);
   group.add(ground);
   // boulders along the walls, three shapes, instanced
   const edges = []; for (let j = 1; j < F.H - 1; j++) for (let i = 1; i < F.W - 1; i++) { if (!F.grid[i + j * F.W]) continue; let n = 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) n += !F.grid[i + a + (j + b) * F.W]; if (n) edges.push([i, j]); }
@@ -92,8 +118,8 @@ export function buildWorld(F, scene) {
     group.add(mesh);
   }
   // old flat slabs set into the floor, and loose stones
-  { const geoS = new THREE.BoxGeometry(1.5, 0.05, 1.1), mesh = new THREE.InstancedMesh(geoS, std('#8a8e86', { map: tex.map, roughness: 0.9 }), F.slabs.length);
-    F.slabs.forEach(([i, j], k) => { p3.set(centre(i) + (R() - 0.5), 0.01, centre(j) + (R() - 0.5)); q.setFromEuler(e.set((R() - 0.5) * 0.06, R() * 6.3, (R() - 0.5) * 0.06)); sc.set(0.7 + R() * 0.8, 1, 0.7 + R() * 0.8); mesh.setMatrixAt(k, m4.compose(p3, q, sc)); c3.setHSL(0.22, 0.06, 0.62 + R() * 0.2); mesh.setColorAt(k, c3); });
+  { const geoS = new THREE.BoxGeometry(1.5, 0.05, 1.1), mesh = new THREE.InstancedMesh(geoS, std('#6a6e64', { roughness: 0.95 }), F.slabs.length);
+    F.slabs.forEach(([i, j], k) => { p3.set(centre(i) + (R() - 0.5), 0.01, centre(j) + (R() - 0.5)); q.setFromEuler(e.set((R() - 0.5) * 0.06, R() * 6.3, (R() - 0.5) * 0.06)); sc.set(0.7 + R() * 0.8, 1, 0.7 + R() * 0.8); mesh.setMatrixAt(k, m4.compose(p3, q, sc)); c3.setHSL(0.22, 0.06, 0.26 + R() * 0.08); mesh.setColorAt(k, c3); });
     group.add(mesh); }
   // bones: skulls, long bones and ribs, lying about
   const bonePile = F.bones.flatMap(([i, j]) => { const n = 1 + Math.floor(R() * 4), out = []; for (let k = 0; k < n; k++) out.push([centre(i) + (R() - 0.5) * 1.8, centre(j) + (R() - 0.5) * 1.8, R()]); return out; });
@@ -120,6 +146,45 @@ export function buildWorld(F, scene) {
     const gl = new THREE.Sprite(glowMat); gl.position.y = 1.6; gl.scale.setScalar(3); b.add(gl);
     group.add(b); return { x, z, y: 4.2, color: '#ff8a3a', power: 1.25 };
   });
+  // ---- the remains of an older temple and graveyard: broken pillars, gravestones, candles, stalagmites, webs, mist
+  const dummy = new THREE.Object3D(), putI = (mesh, k, x, y, z, rx, ry, rz, sx, sy, sz) => { dummy.position.set(x, y, z); dummy.rotation.set(rx, ry, rz); dummy.scale.set(sx, sy ?? sx, sz ?? sx); dummy.updateMatrix(); mesh.setMatrixAt(k, dummy.matrix); };
+  { const pm = std('#8a8880', { roughness: 0.92, flatShading: true }), n = F.pillars.length;
+    const shaftG = new THREE.CylinderGeometry(0.42, 0.46, 1, 14, 3); { const pp = shaftG.attributes.position; for (let i = 0; i < pp.count; i++) { const a = Math.atan2(pp.getZ(i), pp.getX(i)), f = 1 - 0.06 * Math.max(0, Math.cos(a * 14)); pp.setX(i, pp.getX(i) * f); pp.setZ(i, pp.getZ(i) * f); } shaftG.computeVertexNormals(); }
+    const shaft = new THREE.InstancedMesh(shaftG, pm, n * 2), base = new THREE.InstancedMesh(new THREE.BoxGeometry(1.25, 0.36, 1.25), pm, n), top = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.52, 0.42, 0.28, 14), pm, n), rub = new THREE.InstancedMesh(rockGeometry(F.seed + 3, 0), pm, n * 4);
+    F.pillars.forEach(([i, j], k) => { const x = centre(i), z = centre(j), h = 1.4 + R() * 3.4, broken = R() < 0.6, ry = R() * 6;
+      putI(base, k, x, 0.18, z, 0, ry, 0, 1); putI(shaft, k * 2, x, 0.36 + h / 2, z, 0, ry, (R() - 0.5) * 0.06, 1, h, 1);
+      if (broken) { putI(top, k, x, -5, z, 0, 0, 0, 0.01); putI(shaft, k * 2 + 1, x + 1.2, 0.42, z + 0.6, Math.PI / 2, ry, 0.2, 1, 0.8 + R(), 1); }
+      else { putI(top, k, x, 0.36 + h + 0.14, z, 0, ry, 0, 1); putI(shaft, k * 2 + 1, x, -5, z, 0, 0, 0, 0.01); }
+      for (let r = 0; r < 4; r++) putI(rub, k * 4 + r, x + (R() - 0.5) * 2.6, 0.05, z + (R() - 0.5) * 2.6, R() * 3, R() * 3, R() * 3, 0.15 + R() * 0.25); });
+    group.add(shaft, base, top, rub); }
+  { const sh = new THREE.Shape(); sh.moveTo(-0.38, 0); sh.lineTo(-0.38, 0.75); sh.quadraticCurveTo(-0.38, 1.12, 0, 1.12); sh.quadraticCurveTo(0.38, 1.12, 0.38, 0.75); sh.lineTo(0.38, 0); sh.closePath();
+    const tm = std('#8a8a84', { roughness: 0.95 }), n = F.tombs.length * 2, stone = new THREE.InstancedMesh(new THREE.ExtrudeGeometry(sh, { depth: 0.16, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 1 }), tm, n);
+    const cross = new THREE.InstancedMesh(merge([new THREE.BoxGeometry(0.12, 1.1, 0.12).translate(0, 0.55, 0), new THREE.BoxGeometry(0.6, 0.12, 0.12).translate(0, 0.78, 0)]), tm, n), mound = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), std('#2e2a24', { roughness: 1 }), n);
+    let q2 = 0; F.tombs.forEach(([i, j]) => { for (let m = 0; m < 2; m++) { const x = centre(i) + (m ? 1.1 : -0.6) + (R() - 0.5) * 0.4, z = centre(j) + (R() - 0.5) * 0.8, ry = (R() - 0.5) * 0.6, tilt = (R() - 0.5) * 0.35, s2 = 0.8 + R() * 0.5;
+      if (R() < 0.7) { putI(stone, q2, x, -0.05, z, tilt, ry, (R() - 0.5) * 0.2, s2); putI(cross, q2, x, -9, z, 0, 0, 0, 0.01); } else { putI(cross, q2, x, -0.05, z, tilt, ry, (R() - 0.5) * 0.3, s2); putI(stone, q2, x, -9, z, 0, 0, 0, 0.01); }
+      putI(mound, q2, x, 0, z + 0.75 * s2, 0, ry, 0, 0.5 * s2, 0.12, 0.9 * s2); q2++; } });
+    group.add(stone, cross, mound); }
+  // candles in clusters on the floor by the walls, each with its own small flame
+  { const wax = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.045, 0.05, 1, 8), std('#e8dcb8', { roughness: 0.7, emissive: '#3a2410' }), F.candles.length * 5), pool = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.3, 0.32, 0.02, 12), std('#d8cca8', { roughness: 0.6 }), F.candles.length);
+    const cMat = new THREE.SpriteMaterial({ map: flameTexture(), color: '#ffb050', blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9 }), cGlow = new THREE.SpriteMaterial({ map: glowTexture(), color: '#ff9a40', blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.25 });
+    let q3 = 0; F.candles.forEach(([i, j], k) => { const cx = centre(i) + (R() - 0.5), cz = centre(j) + (R() - 0.5); putI(pool, k, cx, 0.01, cz, 0, 0, 0, 1);
+      for (let m = 0; m < 5; m++) { const a = m / 5 * 6.28 + R(), r = 0.08 + R() * 0.18, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r, h = 0.12 + R() * 0.32; putI(wax, q3++, x, h / 2, z, 0, 0, 0, 1, h, 1);
+        const f = new THREE.Sprite(cMat); f.position.set(x, h + 0.06, z); f.scale.set(0.09, 0.16, 1); group.add(f); flames.push({ s: f, k: R() * 10, base: h + 0.06, sx: 0.09, sy: 0.16 }); }
+      const g2 = new THREE.Sprite(cGlow); g2.position.set(cx, 0.35, cz); g2.scale.setScalar(1.8); group.add(g2); });
+    group.add(wax, pool); }
+  // stalagmites rising where the floor meets the rock
+  { const list = edges.filter(() => R() < 0.22), sm = new THREE.InstancedMesh(new THREE.ConeGeometry(0.35, 1, 7, 3), rockMat, list.length);
+    list.forEach(([i, j], k) => { let ox = 0, oz = 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!F.grid[i + a + (j + b) * F.W]) { ox += a; oz += b; } const x = centre(i) + ox * 0.9 + (R() - 0.5) * 0.6, z = centre(j) + oz * 0.9 + (R() - 0.5) * 0.6, h = 0.8 + R() * 2.4; putI(sm, k, x, h / 2 - 0.1, z, (R() - 0.5) * 0.2, R() * 6, (R() - 0.5) * 0.2, 0.6 + R() * 0.7, h, 0.6 + R() * 0.7); c3.setHSL(0.25, 0.05, 0.3 + R() * 0.1); sm.setColorAt(k, c3); });
+    group.add(sm); }
+  // spider webs strung across the corners of the cave
+  { const wc = document.createElement('canvas'); wc.width = wc.height = 256; const g = wc.getContext('2d'); g.strokeStyle = 'rgba(230,235,240,0.55)'; g.lineWidth = 1.2; g.translate(0, 0);
+    for (let k = 0; k <= 8; k++) { const a = k / 8 * Math.PI / 2; g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a) * 256, Math.sin(a) * 256); g.stroke(); }
+    for (let r = 24; r < 250; r += 22 + r * 0.08) { g.beginPath(); for (let k = 0; k <= 8; k++) { const a = k / 8 * Math.PI / 2, rr = r * (0.92 + 0.08 * Math.sin(k * 3)); k ? g.quadraticCurveTo(Math.cos(a - 0.1) * rr * 0.93, Math.sin(a - 0.1) * rr * 0.93, Math.cos(a) * rr, Math.sin(a) * rr) : g.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); } g.stroke(); }
+    const webMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(wc), transparent: true, depthWrite: false, side: THREE.DoubleSide, opacity: 0.6 });
+    let n = 0;
+    for (let j = 1; j < F.H - 1 && n < 30; j++) for (let i = 1; i < F.W - 1 && n < 30; i++) { if (F.grid[i + j * F.W] || R() > 0.12) continue; for (const [a, b] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) { if (F.grid[i + a + j * F.W] && F.grid[i + (j + b) * F.W]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), webMat); w.position.set(centre(i) + a * 0.55, 1.6 + R(), centre(j) + b * 0.55); w.rotation.set(0, Math.atan2(a, b) + Math.PI * 0.75, (R() - 0.5) * 0.4); w.rotateX(-0.5); group.add(w); n++; break; } } } }
+  // low mist drifting over the floor
+  const mist = []; { const mm = new THREE.SpriteMaterial({ map: glowTexture(), color: '#5a7a78', transparent: true, opacity: 0.07, depthWrite: false }); for (let k = 0; k < 70; k++) { const kk = Math.floor(R() * F.open), cells = []; for (let q4 = 0; q4 < 1; q4++) { let c = Math.floor(R() * F.W * F.H); while (F.grid[c]) c = Math.floor(R() * F.W * F.H); cells.push(c); } const c = cells[0], s = new THREE.Sprite(mm); s.position.set(centre(c % F.W), 0.6, centre(Math.floor(c / F.W))); s.scale.set(9, 4, 1); group.add(s); mist.push({ s, x0: s.position.x, z0: s.position.z, k: R() * 10 }); } }
   // light: a pool of point lights handed to the nearest fires and crystals each moment
   const lamps = [...braziers, ...crystals.map(([x, z]) => ({ x, z, y: 1.2, color: '#40f0d8', power: 0.6 }))];
   const pool = []; for (let k = 0; k < 6; k++) { const L = new THREE.PointLight('#ff8a3a', 0, 15, 1.6); group.add(L); pool.push(L); }
@@ -163,7 +228,8 @@ export function buildWorld(F, scene) {
   return {
     group, braziers, chests, shrines, obelisk, portal: { group: portal, x: ax + 6.5, z: az, disc, light: pLight, ring: ringM },
     update(t, dt, px, pz) {
-      for (const f of flames) { const w = Math.sin(t * 9 + f.k) * 0.12 + Math.sin(t * 23 + f.k * 3) * 0.06; f.s.scale.set(0.5 + w * 0.6, 0.8 + w * 1.4, 1); f.s.position.y = f.base + w * 0.2; }
+      for (const f of flames) { const w = Math.sin(t * 9 + f.k) * 0.12 + Math.sin(t * 23 + f.k * 3) * 0.06, sx = f.sx || 0.5, sy = f.sy || 0.8; f.s.scale.set(sx * (1 + w * 1.2), sy * (1 + w * 1.75), 1); f.s.position.y = f.base + w * 0.25 * sy; }
+      for (const m of mist) { m.s.position.x = m.x0 + Math.sin(t * 0.05 + m.k) * 3; m.s.position.z = m.z0 + Math.cos(t * 0.04 + m.k * 1.3) * 2; m.s.material.opacity = 0.07; }
       lampT -= dt; if (lampT <= 0) { lampT = 0.3; const near = lamps.map((l) => [l, (l.x - px) ** 2 + (l.z - pz) ** 2]).sort((a, b) => a[1] - b[1]).slice(0, pool.length); pool.forEach((L, k) => { const l = near[k] && near[k][1] < 900 ? near[k][0] : null; L.userData.l = l; if (l) { L.position.set(l.x, l.y, l.z); L.color.set(l.color); } }); }
       pool.forEach((L, k) => { const l = L.userData.l; L.intensity = l ? (l.power * (l.shrine && shrines.find((s) => s.x === l.x && s.used) ? 0.2 : 1)) * (13 + Math.sin(t * 11 + k) * 1.6 + Math.sin(t * 29 + k * 2) * 1) : 0; });
       for (const s of shrines) { s.orb.position.y = 2 + Math.sin(t * 2 + s.x) * 0.15; s.orb.rotation.y = t; s.halo.material.opacity = s.used ? 0.1 : 0.6 + Math.sin(t * 3) * 0.1; }

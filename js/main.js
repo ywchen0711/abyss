@@ -6,14 +6,15 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { makeFloor, bfs, cellOf, centre, CELL, solid, slide, sight } from './cave.js';
-import { buildWorld, glowTexture, rockGeometry } from './world.js';
-import { makeHero, poseHero, swordTip } from './hero.js';
-import { Horde, KINDS } from './foes.js';
-import { FX } from './fx.js';
-import { SKILLS, PASSIVES, MAX_RANK, skillIcon, cast, slash, stepSkills } from './skills.js';
-import { SLOTS, SLOT_NAME, RARITY, LEGENDS, makeItem, itemName, itemLines, score, price } from './items.js';
-import { sound } from './audio.js';
+import { makeFloor, bfs, cellOf, centre, CELL, solid, slide, sight } from './cave.js?v=2';
+import { buildWorld, glowTexture, rockGeometry } from './world.js?v=2';
+import { makeHero, poseHero, swordTip, setHeroEnv } from './hero.js?v=2';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { Horde, KINDS } from './foes.js?v=2';
+import { FX } from './fx.js?v=2';
+import { SKILLS, PASSIVES, MAX_RANK, skillIcon, cast, slash, stepSkills } from './skills.js?v=2';
+import { SLOTS, SLOT_NAME, RARITY, LEGENDS, makeItem, itemName, itemLines, score, price } from './items.js?v=2';
+import { sound } from './audio.js?v=2';
 
 const $ = (id) => document.getElementById(id);
 const KEY = 'abyss.v1', GAME = 'abyss';
@@ -49,6 +50,8 @@ addEventListener('resize', resize); resize();
 
 // ------------------------------------------------------------------ the hero and the game state
 const H = makeHero(); scene.add(H.root);
+// something for the steel to reflect (only metals use it, so the cave stays dark)
+const envTex = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture; setHeroEnv(envTex); horde.setEnv(envTex);
 const G = {
   scene, fx, horde, sound, active: [], skills: S.skills, st: null, F: null, W: null,
   h: { x: 0, z: 0, yaw: 0, hp: 100, mana: 100, swing: -1, swingCd: 0, castT: -1, dash: -1, dashCd: 0, whirl: 0, hitT: 0, dead: false, deadT: 0, alive: true, potCd: 0, cds: {}, buff: {} },
@@ -491,6 +494,8 @@ function frame(now) {
   if (run) {
     G.st.buffK = (G.buffs.fury ? 1.5 : 1); const baseDmg = G.st.dmg; if (G.buffs.fury) G.st.dmg = baseDmg * 1.5; const baseAtk = G.st.atk; if (G.buffs.haste) G.st.atk = baseAtk * 1.3;
     stepHero(dt);
+    // dust motes drifting in the light around him
+    if (Math.random() < 0.3) { const a = Math.random() * 6.28, r = 2 + Math.random() * 7; fx.glow.emit({ x: h.x + Math.cos(a) * r, y: 0.4 + Math.random() * 3, z: h.z + Math.sin(a) * r, vx: (Math.random() - 0.5) * 0.3, vy: 0.08 + Math.random() * 0.2, vz: (Math.random() - 0.5) * 0.3, color: fx.C.set('#ffd8a0'), life: 3 + Math.random() * 2, size: 0.07, size1: 0.05, a: 0.45 }); }
     G.flowT -= dt; if (G.flowT <= 0) { G.flowT = 0.4; bfs(G.F.grid, G.F.W, G.F.H, cellOf(h.x), cellOf(h.z), G.flow); markSeen(); }
     horde.update(dt, C);
     // a brute about to slam shows where
@@ -502,7 +507,7 @@ function frame(now) {
   // draw: the hero
   H.root.position.set(h.x, 0, h.z); H.root.rotation.y = h.yaw;
   poseHero(H, { speed: h.speed || 0, attack: h.swing, cast: h.castT, spin: h.whirl > 0 ? G.t * 18 : null, dash: h.dash, hit: Math.max(0, h.hitT) * 4, dead: h.dead ? h.deadT * 2 : 0, t: G.t }, run ? dt : 0);
-  H.root.updateMatrixWorld(true); H.chest.getWorldPosition(vA); vA.y += 0.2; swordTip(H, vB); fx.trailPush(H.arms[1].hand.getWorldPosition(new THREE.Vector3()), vB, h.swing >= 0.2 && h.swing < 0.85 || h.whirl > 0);
+  H.root.updateMatrixWorld(true); H.chest.getWorldPosition(vA); vA.y += 0.2; swordTip(H, vB); fx.trailPush(H.arms[1].hand.getWorldPosition(new THREE.Vector3()), vB, h.swing >= 0.28 && h.swing < 0.62 || h.whirl > 0);
   heroLight.position.set(h.x, 6, h.z + 1); heroLight.intensity = h.dead ? 16 : 42;
   // ice spikes from the frost nova
   { let n = 0; const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(); for (const a of G.active) { if (a.id !== 'spike' || a.t < 0) continue; const k = a.t / a.life, grow = Math.min(1, a.t * 8), shrink = k > 0.8 ? (1 - k) / 0.2 : 1; p.set(a.x, 0.5 * a.s * grow * shrink, a.z); q.setFromEuler(new THREE.Euler(0.25, a.yaw, 0.2)); s.set(a.s, a.s * grow * shrink, a.s); spikes.setMatrixAt(n++, m4.compose(p, q, s)); if (n >= 400) break; } spikes.count = n; spikes.instanceMatrix.needsUpdate = true; }
