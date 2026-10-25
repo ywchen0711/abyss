@@ -9,15 +9,18 @@ export const RARITY = [
   { id: 'rare', name: L2('稀有', 'Rare'), color: '#ffd84a', k: 1.3, aff: [3, 4] },
   { id: 'legend', name: L2('傳說', 'Legendary'), color: '#ff8a2a', k: 1.5, aff: [4, 4] },
 ];
-const BASES = {
-  weapon: [L2('長劍', 'Longsword'), L2('闊劍', 'Broadsword'), L2('戰斧', 'War Axe'), L2('鏈錘', 'Flail'), L2('巨劍', 'Greatsword'), L2('戰錘', 'Warhammer')],
-  helm: [L2('鐵盔', 'Iron Helm'), L2('巨盔', 'Great Helm'), L2('骨冠', 'Bone Circlet'), L2('翼盔', 'Winged Helm')],
-  armor: [L2('鎖子甲', 'Chain Mail'), L2('板甲', 'Plate'), L2('鱗甲', 'Scale Mail'), L2('聖騎士胸甲', 'Templar Cuirass')],
-  gloves: [L2('皮手套', 'Leather Gloves'), L2('鐵手甲', 'Gauntlets'), L2('骨爪手套', 'Bonegrip Gloves')],
-  boots: [L2('皮靴', 'Leather Boots'), L2('戰靴', 'War Boots'), L2('板靴', 'Plated Greaves')],
-  ring: [L2('鐵戒', 'Iron Ring'), L2('骨戒', 'Bone Ring'), L2('紅寶石戒指', 'Ruby Ring'), L2('月光戒指', 'Moonstone Ring')],
-  amulet: [L2('護身符', 'Talisman'), L2('聖徽', 'Holy Symbol'), L2('獸牙項鍊', 'Fang Necklace')],
+const B = (k, zh, en) => ({ k, zh, en });
+export const BASES = {
+  weapon: [B('longsword', '長劍', 'Longsword'), B('broadsword', '闊劍', 'Broadsword'), B('axe', '戰斧', 'War Axe'), B('flail', '鏈錘', 'Flail'), B('greatsword', '巨劍', 'Greatsword'), B('hammer', '戰錘', 'Warhammer')],
+  helm: [B('kettle', '鐵盔', 'Iron Helm'), B('great', '巨盔', 'Great Helm'), B('circlet', '骨冠', 'Bone Circlet'), B('winged', '翼盔', 'Winged Helm')],
+  armor: [B('chain', '鎖子甲', 'Chain Mail'), B('plate', '板甲', 'Plate'), B('scale', '鱗甲', 'Scale Mail'), B('templar', '聖騎士胸甲', 'Templar Cuirass')],
+  gloves: [B('leather', '皮手套', 'Leather Gloves'), B('gauntlets', '鐵手甲', 'Gauntlets'), B('bonegrip', '骨爪手套', 'Bonegrip Gloves')],
+  boots: [B('leather', '皮靴', 'Leather Boots'), B('war', '戰靴', 'War Boots'), B('greaves', '板靴', 'Plated Greaves')],
+  ring: [B('iron', '鐵戒', 'Iron Ring'), B('bone', '骨戒', 'Bone Ring'), B('ruby', '紅寶石戒指', 'Ruby Ring'), B('moon', '月光戒指', 'Moonstone Ring')],
+  amulet: [B('talisman', '護身符', 'Talisman'), B('holy', '聖徽', 'Holy Symbol'), B('fang', '獸牙項鍊', 'Fang Necklace')],
 };
+// which look an item has (older saves stored the base without its key)
+export function baseKey(it) { if (!it) return null; if (it.base && it.base.k) return it.base.k; const b = (BASES[it.slot] || []).find((x) => it.base && x.en === it.base.en); return b ? b.k : (BASES[it.slot] || [{ k: null }])[0].k; }
 // affixes: what a roll can give (value at item level L)
 export const AFFIX = {
   dmgPct: { name: (v) => L2(`傷害 +${v}%`, `+${v}% damage`), roll: (L) => 5 + Math.round(Math.random() * (6 + L)) },

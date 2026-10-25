@@ -3,7 +3,7 @@
 // blessed hammers and a meteor. Each has its look (fire rising, ice spikes, forked bolts, a spinning blade ring,
 // golden hammers, a burning rock from above), its cost in mana and its cooldown.
 import * as THREE from 'three';
-import { solid } from './cave.js?v=2';
+import { solid } from './cave.js?v=3';
 
 const L2 = (zh, en) => ({ zh, en });
 export const SKILLS = {

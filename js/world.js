@@ -2,7 +2,7 @@
 // cliffs where the grid is solid), boulders along the walls, flat old slabs, bones everywhere, iron braziers with
 // living fire, teal crystals, the obelisk on its rune circle, chests, shrines and the portal down.
 import * as THREE from 'three';
-import { CELL, density, rng, centre } from './cave.js?v=2';
+import { CELL, density, rng, centre } from './cave.js?v=3';
 
 // ------------------------------------------------------------------ textures painted on a canvas
 function canvas(n) { const c = document.createElement('canvas'); c.width = c.height = n; return c; }

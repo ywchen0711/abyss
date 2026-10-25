@@ -6,15 +6,15 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { makeFloor, bfs, cellOf, centre, CELL, solid, slide, sight } from './cave.js?v=2';
-import { buildWorld, glowTexture, rockGeometry } from './world.js?v=2';
-import { makeHero, poseHero, swordTip, setHeroEnv } from './hero.js?v=2';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { Horde, KINDS } from './foes.js?v=2';
-import { FX } from './fx.js?v=2';
-import { SKILLS, PASSIVES, MAX_RANK, skillIcon, cast, slash, stepSkills } from './skills.js?v=2';
-import { SLOTS, SLOT_NAME, RARITY, LEGENDS, makeItem, itemName, itemLines, score, price } from './items.js?v=2';
-import { sound } from './audio.js?v=2';
+import { makeFloor, bfs, cellOf, centre, CELL, solid, slide, sight } from './cave.js?v=3';
+import { buildWorld, glowTexture, rockGeometry } from './world.js?v=3';
+import { makeHero, poseHero, swordTip, setHeroEnv, dress } from './hero.js?v=3';
+import { itemIcon } from './icons.js?v=3';
+import { Horde, KINDS } from './foes.js?v=3';
+import { FX } from './fx.js?v=3';
+import { SKILLS, PASSIVES, MAX_RANK, skillIcon, cast, slash, stepSkills } from './skills.js?v=3';
+import { SLOTS, SLOT_NAME, RARITY, LEGENDS, makeItem, itemName, itemLines, score, price, baseKey } from './items.js?v=3';
+import { sound } from './audio.js?v=3';
 
 const $ = (id) => document.getElementById(id);
 const KEY = 'abyss.v1', GAME = 'abyss';
@@ -26,7 +26,7 @@ const floorLabel = (d) => L(`第${d <= 10 ? NUM[d] : d}層`, `Floor ${d}`);
 const floorName = (d) => { const n = FLOOR_NAMES[(d - 1) % FLOOR_NAMES.length]; return L(n[0], n[1]) + (d > FLOOR_NAMES.length ? ' ' + 'I'.repeat(Math.ceil(d / FLOOR_NAMES.length)) : ''); };
 
 // ------------------------------------------------------------------ the save
-const fresh = () => ({ v: 1, level: 1, xp: 0, points: 1, offers: null, skills: {}, slots: [null, null, null, null], passives: {}, runes: { power: 0, life: 0, swift: 0 }, equip: { weapon: { id: 'start', slot: 'weapon', rar: 0, base: { zh: '老兵長劍', en: 'Veteran’s Longsword' }, lvl: 1, aff: {}, dmg: 12 } }, bag: [], gold: 0, souls: 0, potions: 3, depth: 1, best: 1, kills: 0, seed: Math.floor(Math.random() * 1e6) });
+const fresh = () => ({ v: 1, level: 1, xp: 0, points: 1, offers: null, skills: {}, slots: [null, null, null, null], passives: {}, runes: { power: 0, life: 0, swift: 0 }, equip: { weapon: { id: 'start', slot: 'weapon', rar: 0, base: { k: 'longsword', zh: '老兵長劍', en: 'Veteran’s Longsword' }, lvl: 1, aff: {}, dmg: 12 } }, bag: [], gold: 0, souls: 0, potions: 3, depth: 1, best: 1, kills: 0, seed: Math.floor(Math.random() * 1e6) });
 let S = load();
 function load() { try { const v = JSON.parse(localStorage.getItem(KEY)); if (v && v.v === 1) return { ...fresh(), ...v }; } catch (e) { /* none */ } return fresh(); }
 let cloud = null;
@@ -49,9 +49,20 @@ function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h
 addEventListener('resize', resize); resize();
 
 // ------------------------------------------------------------------ the hero and the game state
+// something for the steel to reflect (only metals use it, so the cave stays dark): a small painted room of firelight,
+// made from canvases so the paper doll's own renderer can use it too
+function envCube() {
+  const faces = []; for (let f = 0; f < 6; f++) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+    if (f === 2) { g.fillStyle = '#8a7058'; g.fillRect(0, 0, 64, 64); } else if (f === 3) { g.fillStyle = '#080706'; g.fillRect(0, 0, 64, 64); }
+    else { const gr = g.createLinearGradient(0, 0, 0, 64); gr.addColorStop(0, f === 0 ? '#f0c890' : f === 4 ? '#8a9aa8' : '#5a4a3c'); gr.addColorStop(0.55, '#2e2620'); gr.addColorStop(1, '#0a0908'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); if (f === 0) { const s2 = g.createRadialGradient(32, 22, 2, 32, 22, 20); s2.addColorStop(0, 'rgba(255,240,210,1)'); s2.addColorStop(1, 'rgba(255,200,140,0)'); g.fillStyle = s2; g.fillRect(0, 0, 64, 64); } }
+    faces.push(c); }
+  const t = new THREE.CubeTexture(faces); t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true; return t;
+}
+const envTex = envCube(); setHeroEnv(envTex); horde.setEnv(envTex);
 const H = makeHero(); scene.add(H.root);
-// something for the steel to reflect (only metals use it, so the cave stays dark)
-const envTex = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture; setHeroEnv(envTex); horde.setEnv(envTex);
+// what he wears, as the hero's model sees it
+const lookOf = (eq) => Object.fromEntries(SLOTS.map((s) => [s, eq[s] ? { k: baseKey(eq[s]), rar: eq[s].rar } : null]));
+dress(H, lookOf(S.equip));
 const G = {
   scene, fx, horde, sound, active: [], skills: S.skills, st: null, F: null, W: null,
   h: { x: 0, z: 0, yaw: 0, hp: 100, mana: 100, swing: -1, swingCd: 0, castT: -1, dash: -1, dashCd: 0, whirl: 0, hitT: 0, dead: false, deadT: 0, alive: true, potCd: 0, cds: {}, buff: {} },
@@ -77,7 +88,7 @@ function stats() {
     gold: 1 + a('gold') / 100 + 0.25 * p('greed'), pickup: 2.4 + p('greed'), legend,
   };
 }
-function restat() { const old = G.st; G.st = stats(); if (old) { G.h.hp = Math.min(G.st.maxHp, G.h.hp + Math.max(0, G.st.maxHp - old.maxHp)); } }
+function restat() { dress(H, lookOf(S.equip)); const old = G.st; G.st = stats(); if (old) { G.h.hp = Math.min(G.st.maxHp, G.h.hp + Math.max(0, G.st.maxHp - old.maxHp)); } }
 G.st = stats(); G.h.hp = G.st.maxHp;
 
 // ------------------------------------------------------------------ a floor
@@ -277,20 +288,48 @@ function camp() {
   }
 }
 
+// ------------------------------------------------------------------ the paper doll: the hero in what he wears, turning slowly on a plinth (drag to turn him)
+let doll = null;
+function getDoll() {
+  if (doll) return doll;
+  const cv = document.createElement('canvas'); cv.className = 'dollcv';
+  const r = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true }); r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); r.setSize(240, 340, false); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping;
+  const sc = new THREE.Scene(), cam = new THREE.PerspectiveCamera(28, 240 / 340, 0.1, 30); cam.position.set(0, 1.4, 5.2); cam.lookAt(0, 1.02, 0);
+  sc.add(new THREE.AmbientLight('#5a6a70', 0.7)); const key = new THREE.PointLight('#ffc890', 30, 12, 1.5); key.position.set(1.6, 2.6, 2.4); const rim = new THREE.PointLight('#6a9aff', 22, 12, 1.5); rim.position.set(-2, 2.2, -1.6); const fill = new THREE.PointLight('#ff7a3a', 8, 8, 1.5); fill.position.set(-1.5, 0.4, 1.5); sc.add(key, rim, fill);
+  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.85, 0.12, 24), new THREE.MeshStandardMaterial({ color: '#2a2622', roughness: 0.8 })); plinth.position.y = -0.06; sc.add(plinth);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.015, 6, 40), new THREE.MeshBasicMaterial({ color: '#c8803a' })); ring.rotation.x = Math.PI / 2; ring.position.y = 0.005; sc.add(ring);
+  const h = makeHero(); h.shadow.visible = false; sc.add(h.root);
+  doll = { cv, r, sc, cam, h, yaw: -0.5, drag: null };
+  cv.addEventListener('pointerdown', (e) => { doll.drag = e.clientX; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', (e) => { if (doll.drag != null) { doll.yaw += (e.clientX - doll.drag) * 0.012; doll.drag = e.clientX; } });
+  cv.addEventListener('pointerup', () => { doll.drag = null; });
+  return doll;
+}
+function drawDoll(t, dt) {
+  if (!doll || !doll.cv.isConnected) return;
+  dress(doll.h, lookOf(S.equip)); if (doll.drag == null) doll.yaw += dt * 0.35; doll.h.root.rotation.y = doll.yaw;
+  poseHero(doll.h, { speed: 0, attack: -1, cast: -1, spin: null, dash: -1, hit: 0, dead: 0, t }, dt); doll.r.render(doll.sc, doll.cam);
+}
+
 // ------------------------------------------------------------------ the inventory
 function bagPanel(back) {
   let sel = null;
   const draw = () => {
     const st = G.st, it = sel && (sel.eq ? S.equip[sel.slot] : S.bag[sel.i]), cur = it && !sel.eq ? S.equip[it.slot] : null;
-    const tip = it ? `<div class="tip"><b style="color:${RARITY[it.rar].color}">${itemName(it, lang)}</b> <small>${T(RARITY[it.rar].name)} ${T(SLOT_NAME[it.slot])} · ${L('等級', 'level')} ${it.lvl}</small><ul>${itemLines(it, lang).map((l) => `<li>${l}</li>`).join('')}</ul>${it.legend ? `<div class="leg">✦ ${T(LEGENDS[it.legend].desc)}</div>` : ''}
+    const tip = it ? `<div class="tip"><div class="tiph"><img src="${itemIcon(it)}"><div><b style="color:${RARITY[it.rar].color}">${itemName(it, lang)}</b><br><small>${T(RARITY[it.rar].name)} ${T(SLOT_NAME[it.slot])} · ${L('等級', 'level')} ${it.lvl}</small></div></div><ul>${itemLines(it, lang).map((l) => `<li>${l}</li>`).join('')}</ul>${it.legend ? `<div class="leg">✦ ${T(LEGENDS[it.legend].desc)}</div>` : ''}
       ${cur ? `<div class="${score(it) >= score(cur) ? 'up' : 'down'}">${score(it) >= score(cur) ? '▲' : '▼'} ${L('比較目前', 'vs. worn')}: ${itemName(cur, lang)}</div>` : ''}
-      <div class="row">${sel.eq ? '' : `<button class="pb sm" id="bEquip">${L('裝備', 'Equip')}</button>`}${sel.eq ? '' : `<button class="pb sm red" id="bSell">${L('賣出', 'Sell')} +${price(it)}</button>`}</div></div>` : `<div class="tip help">${L('點一件裝備看看。▲ 表示比身上的好。', 'Tap an item to look at it. ▲ means better than what you wear.')}</div>`;
-    panel(`<h2>🎒 ${L('背包', 'Inventory')}</h2><div class="inv"><div><div class="paper">${SLOTS.map((s) => { const e = S.equip[s]; return `<button class="eq ${sel && sel.eq && sel.slot === s ? 'sel' : ''}" data-eq="${s}"><small>${T(SLOT_NAME[s])}</small>${e ? `<span style="color:${RARITY[e.rar].color}">${itemName(e, lang)}</span>` : '—'}</button>`; }).join('')}</div>
-      <div class="stats"><span>${L('傷害', 'Damage')}</span><b>${Math.round(st.dmg)}</b><span>${L('生命', 'Life')}</span><b>${st.maxHp}</b><span>${L('護甲', 'Armour')}</span><b>${st.armor}</b><span>${L('暴擊', 'Critical')}</span><b>${Math.round(st.crit * 100)}%</b><span>${L('攻速', 'Attack speed')}</span><b>${Math.round(st.atk * 100)}%</b><span>${L('移動', 'Move')}</span><b>${Math.round(st.move / 6.4 * 100)}%</b><span>${L('吸血', 'Leech')}</span><b>${Math.round(st.leech * 100)}%</b><span>${L('金幣', 'Gold find')}</span><b>${Math.round(st.gold * 100)}%</b></div></div>
-      <div><div class="bag">${S.bag.map((b, i) => `<button class="bi ${sel && !sel.eq && sel.i === i ? 'sel' : ''}" data-bi="${i}" style="color:${RARITY[b.rar].color}">${itemName(b, lang)}${score(b) > score(S.equip[b.slot]) ? ' <span style="color:#7aff7a">▲</span>' : ''}<br><small style="color:#8a7a60">${T(SLOT_NAME[b.slot])}</small></button>`).join('') || `<p class="help">${L('空的', 'Empty')}</p>`}</div>${tip}</div></div>${back ? `<div class="row"><button class="pb" id="bBack">${L('返回', 'Back')}</button></div>` : ''}`, { noClose: !!back, onShow: () => {
+      <div class="row">${sel.eq ? `<button class="pb sm" id="bOff" ${S.bag.length >= 30 || it.slot === 'weapon' ? 'disabled' : ''}>${L('卸下', 'Take off')}</button>` : `<button class="pb sm" id="bEquip">${L('穿上', 'Wear it')}</button><button class="pb sm red" id="bSell">${L('賣出', 'Sell')} +${price(it)}</button>`}</div></div>`
+      : `<div class="tip help">${L('點一件裝備看看，穿上後人物會換上它的樣子。拖曳人物可以轉動。▲ 表示比身上的好。', 'Tap an item to look at it; wear it and the hero changes to match. Drag the figure to turn him. ▲ means better than what you wear.')}</div>`;
+    const slot = (s) => { const e = S.equip[s]; return `<button class="dslot ${sel && sel.eq && sel.slot === s ? 'sel' : ''} ${e ? '' : 'empty'}" style="grid-area:${s};${e ? `background-image:url(${itemIcon(e)})` : ''}" data-eq="${s}" title="${e ? itemName(e, lang) : T(SLOT_NAME[s])}"><small>${T(SLOT_NAME[s])}</small></button>`; };
+    const stat = (a, b) => `<span>${a}</span><b>${b}</b>`;
+    panel(`<h2>🎒 ${L('裝備', 'Equipment')}</h2><div class="inv"><div><div class="doll">${SLOTS.map(slot).join('')}<div id="dollHost" style="grid-area:doll"></div></div>
+      <div class="stats">${stat(L('傷害', 'Damage'), Math.round(st.dmg))}${stat(L('生命', 'Life'), st.maxHp)}${stat(L('護甲', 'Armour'), st.armor)}${stat(L('暴擊', 'Critical'), Math.round(st.crit * 100) + '%')}${stat(L('攻速', 'Attack speed'), Math.round(st.atk * 100) + '%')}${stat(L('移動', 'Move'), Math.round(st.move / 6.4 * 100) + '%')}${stat(L('吸血', 'Leech'), Math.round(st.leech * 100) + '%')}${stat(L('金幣', 'Gold find'), Math.round(st.gold * 100) + '%')}</div></div>
+      <div><h3>${L('背包', 'Bag')} <small>${S.bag.length}/30</small></h3><div class="bag">${S.bag.map((b, i) => `<button class="bi ${sel && !sel.eq && sel.i === i ? 'sel' : ''}" data-bi="${i}" style="background-image:url(${itemIcon(b)})" title="${itemName(b, lang)}">${score(b) > score(S.equip[b.slot]) ? '<span class="better">▲</span>' : ''}</button>`).join('') || `<p class="help">${L('空的', 'Empty')}</p>`}</div>${tip}</div></div>${back ? `<div class="row"><button class="pb" id="bBack">${L('返回', 'Back')}</button></div>` : ''}`, { noClose: !!back, onShow: () => {
+      $('dollHost').appendChild(getDoll().cv);
       document.querySelectorAll('[data-eq]').forEach((b) => b.onclick = () => { sel = S.equip[b.dataset.eq] ? { eq: true, slot: b.dataset.eq } : null; draw(); });
       document.querySelectorAll('[data-bi]').forEach((b) => b.onclick = () => { sel = { i: +b.dataset.bi }; draw(); });
-      if ($('bEquip')) $('bEquip').onclick = () => { const it = S.bag[sel.i], old = S.equip[it.slot]; S.equip[it.slot] = it; S.bag.splice(sel.i, 1); if (old) S.bag.push(old); sel = null; restat(); save(); sound.play('item'); draw(); };
+      if ($('bEquip')) $('bEquip').onclick = () => { const it = S.bag[sel.i], old = S.equip[it.slot]; S.equip[it.slot] = it; S.bag.splice(sel.i, 1); if (old) S.bag.push(old); sel = { eq: true, slot: it.slot }; restat(); save(); sound.play('item'); draw(); };
+      if ($('bOff')) $('bOff').onclick = () => { S.bag.push(S.equip[sel.slot]); S.equip[sel.slot] = null; sel = null; restat(); save(); sound.play('click'); draw(); };
       if ($('bSell')) $('bSell').onclick = () => { S.gold += price(S.bag[sel.i]); S.bag.splice(sel.i, 1); sel = null; sound.play('coin'); save(); draw(); };
       if ($('bBack')) $('bBack').onclick = back;
     } });
@@ -520,6 +559,7 @@ function frame(now) {
   camera.lookAt(camera.position.x - CAM.x * (G.zoom || 1), camera.position.y - CAM.y * (G.zoom || 1) + 0.8, camera.position.z - CAM.z * (G.zoom || 1));
   fx.update(run ? dt : 0, camera);
   composer.render();
+  drawDoll(performance.now() / 1000, dt);
   stepFloaters(run ? dt : 0);
   if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) $('banner').classList.remove('on'); } if (hintT > 0) { hintT -= dt; if (hintT <= 0) $('hint').textContent = ''; }
   hud(); drawMap(mm, 220, 64); if (!$('bigmap').hidden) drawMap(bm, 640, Math.max(G.F.W, G.F.H) * 1.05, false);
@@ -529,4 +569,4 @@ texts(); titleScreen();
 // a backdrop for the title: the first floor, quietly lit
 { G.F = makeFloor(1, S.seed + 7919); G.W = buildWorld(G.F, scene); G.seen = new Uint8Array(G.F.W * G.F.H); G.depth = 1; G.h.x = centre(G.F.arena[0]) - 6; G.h.z = centre(G.F.arena[1]) + 2; G.flow = bfs(G.F.grid, G.F.W, G.F.H, cellOf(G.h.x), cellOf(G.h.z)); for (let k = 0; k < 14; k++) { const a = k / 14 * 6.28, x = G.h.x + Math.cos(a) * (4 + k % 3 * 2), z = G.h.z + Math.sin(a) * (4 + k % 3 * 2); if (!solid(G.F, x, z)) { const e = horde.spawn(k % 5 ? 'skel' : 'archer', x, z, { sleep: true }); if (e) e.yaw = Math.atan2(G.h.x - x, G.h.z - z); } } }
 (async () => { try { cloud = await import('/save.js'); if (await cloud.pull(GAME, KEY)) { S = load(); G.skills = S.skills; restat(); texts(); } } catch (e) { cloud = null; } })();
-window.ABYSS = { G, S: () => S, cast: (id, at) => cast(G, id, at), horde, begin, loadFloor, levelPanel, camp, bagPanel, choose, makeItem, dropItem, startEvent, finishEvent, hurtHero };
+window.ABYSS = { G, S: () => S, restat, cast: (id, at) => cast(G, id, at), horde, begin, loadFloor, levelPanel, camp, bagPanel, choose, makeItem, dropItem, startEvent, finishEvent, hurtHero };

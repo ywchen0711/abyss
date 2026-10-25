@@ -4,8 +4,8 @@
 // otherwise down the walking-distance field), crowd round without overlapping, wind up and strike, shoot arrows and
 // bolts, and burst into a shower of bones when they die.
 import * as THREE from 'three';
-import { merge } from './world.js?v=2';
-import { slide, sight, cellOf, CELL, solid } from './cave.js?v=2';
+import { merge } from './world.js?v=3';
+import { slide, sight, cellOf, CELL, solid } from './cave.js?v=3';
 
 export const KINDS = {
   skel:   { hp: 22, speed: 3.0, dmg: 5, range: 1.4, scale: 1.05, weapon: 'sword', shield: true, eye: '#ff3a1a', xp: 4, gold: 3, cd: 1.7, tint: '#b8b098' },

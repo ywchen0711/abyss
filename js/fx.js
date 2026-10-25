@@ -1,7 +1,7 @@
 // Light and fire: glowing particles (fire, sparks, frost, souls), dust and smoke, lightning bolts, the sword's trail,
 // circles on the ground (warnings before a boss slam, scorch marks, the frost ring) and a camera shake.
 import * as THREE from 'three';
-import { glowTexture } from './world.js?v=2';
+import { glowTexture } from './world.js?v=3';
 
 const VERT = `attribute float size; attribute vec4 rgba; varying vec4 vC; uniform float uScale;
 void main() { vC = rgba; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = size * uScale / -mv.z; gl_Position = projectionMatrix * mv; }`;
